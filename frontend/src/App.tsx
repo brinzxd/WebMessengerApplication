@@ -6,17 +6,11 @@ import ChatsPage from './pages/ChatsPage';
 import FriendsPage from './pages/FriendsPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
-import Sidebar from './components/Sidebar';
 
 function PrivateLayout({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   if (!token) return <Navigate to="/login" replace />;
-  return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar />
-      <main style={{ flex: 1, overflow: 'auto' }}>{children}</main>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 export default function App() {
