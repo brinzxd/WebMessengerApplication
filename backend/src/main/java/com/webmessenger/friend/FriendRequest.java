@@ -15,11 +15,11 @@ public class FriendRequest {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "from_user_id", nullable = false)
+    @JoinColumn(name = "sender_id", nullable = false)
     private User fromUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "to_user_id", nullable = false)
+    @JoinColumn(name = "receiver_id", nullable = false)
     private User toUser;
 
     @Enumerated(EnumType.STRING)
