@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn package -DskipTests -B
 
 # ---- Run stage ----
-FROM eclipse-temurin:17-jre-alpine
+FROM amazoncorretto:17-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
