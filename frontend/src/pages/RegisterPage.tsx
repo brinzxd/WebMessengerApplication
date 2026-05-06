@@ -15,7 +15,7 @@ export default function RegisterPage() {
     setError('');
     try {
       const data = await register(nickname, password);
-      setAuth(data.token, data.userId);
+      setAuth(data.token, data.userId, data.nickname);
       navigate('/chats');
     } catch {
       setError('Registration failed. Nickname may be taken.');
@@ -43,7 +43,7 @@ export default function RegisterPage() {
           required
         />
         <button type="submit">Register</button>
-        <p>Already have an account? <Link to="/login">Login</Link></p>
+        <p>Already have an account? <Link to="/login">Sign In</Link></p>
       </form>
     </div>
   );
