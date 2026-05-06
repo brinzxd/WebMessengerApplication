@@ -22,20 +22,21 @@ public class UserController {
         return ResponseEntity.ok(userService.getProfile(id));
     }
 
-    // PUT /api/users/me/nickname  { nickname }
+    // PUT /api/users/me/nickname { nickname }
     @PutMapping("/me/nickname")
-    public ResponseEntity<User> updateNickname(
+    public ResponseEntity<Void> updateNickname(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(
-            userService.updateNickname(principal.getId(), body.get("nickname")));
+        userService.updateNickname(principal.getId(), body.get("nickname"));
+        return ResponseEntity.ok().build();
     }
 
-    // POST /api/users/me/avatar  (multipart)
+    // POST /api/users/me/avatar (multipart)
     @PostMapping("/me/avatar")
-    public ResponseEntity<User> uploadAvatar(
+    public ResponseEntity<Map<String, String>> uploadAvatar(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(userService.uploadAvatar(principal.getId(), file));
+        String url = userService.uploadAvatar(principal.getId(), file);
+        return ResponseEntity.ok(Map.of("avatarUrl", url));
     }
 }
