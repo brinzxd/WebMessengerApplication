@@ -15,7 +15,7 @@ export default function LoginPage() {
     setError('');
     try {
       const data = await login(nickname, password);
-      setAuth(data.token, data.userId);
+      setAuth(data.token, data.userId, data.nickname);
       navigate('/chats');
     } catch {
       setError('Invalid nickname or password');
@@ -42,7 +42,7 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <button type="submit">Login</button>
+        <button type="submit">Sign In</button>
         <p>Don't have an account? <Link to="/register">Register</Link></p>
       </form>
     </div>
