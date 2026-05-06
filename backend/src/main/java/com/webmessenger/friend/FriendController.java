@@ -14,42 +14,62 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FriendController {
 
-  private final FriendService friendService;
+    private final FriendService friendService;
 
-  @PostMapping("/request")
-  public ResponseEntity<FriendRequest> sendRequest(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @RequestBody Map<String, String> body) {
-    return ResponseEntity.ok(
-        friendService.sendRequest(principal.getId(), body.get("nickname")));
-  }
+    // POST /api/friends/request  { nickname }
+    @PostMapping("/request")
+    public ResponseEntity<FriendRequest> sendRequest(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(
+            friendService.sendRequest(principal.getId(), body.get("nickname")));
+    }
 
-  @PostMapping("/request/{id}/respond")
-  public ResponseEntity<Void> respond(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @PathVariable Long id,
-      @RequestParam boolean accept) {
-    friendService.respondToRequest(id, principal.getId(), accept);
-    return ResponseEntity.ok().build();
-  }
+    // POST /api/friends/request/{id}/accept
+    @PostMapping("/request/{id}/accept")
+    public ResponseEntity<Void> accept(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id) {
+        friendService.respondToRequest(id, principal.getId(), true);
+        return ResponseEntity.ok().build();
+    }
 
-  @GetMapping("/requests/pending")
-  public ResponseEntity<List<FriendRequest>> pending(
-      @AuthenticationPrincipal UserPrincipal principal) {
-    return ResponseEntity.ok(friendService.getPendingRequests(principal.getId()));
-  }
+    // POST /api/friends/request/{id}/decline
+    @PostMapping("/request/{id}/decline")
+    public ResponseEntity<Void> decline(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id) {
+        friendService.respondToRequest(id, principal.getId(), false);
+        return ResponseEntity.ok().build();
+    }
 
-  @GetMapping
-  public ResponseEntity<List<Friendship>> list(
-      @AuthenticationPrincipal UserPrincipal principal) {
-    return ResponseEntity.ok(friendService.getFriends(principal.getId()));
-  }
+    // GET /api/friends/requests/incoming
+    @GetMapping("/requests/incoming")
+    public ResponseEntity<List<FriendRequest>> incoming(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(friendService.getIncomingRequests(principal.getId()));
+    }
 
-  @DeleteMapping("/{friendId}")
-  public ResponseEntity<Void> remove(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @PathVariable Long friendId) {
-    friendService.removeFriend(principal.getId(), friendId);
-    return ResponseEntity.noContent().build();
-  }
+    // GET /api/friends/requests/sent
+    @GetMapping("/requests/sent")
+    public ResponseEntity<List<FriendRequest>> sent(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(friendService.getSentRequests(principal.getId()));
+    }
+
+    // GET /api/friends
+    @GetMapping
+    public ResponseEntity<List<Friendship>> list(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(friendService.getFriends(principal.getId()));
+    }
+
+    // DELETE /api/friends/{id}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> remove(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id) {
+        friendService.removeFriend(id, principal.getId());
+        return ResponseEntity.ok().build();
+    }
 }
