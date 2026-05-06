@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SettingsService {
-
     private final UserSettingsRepository userSettingsRepository;
     private final BlockedUserRepository blockedUserRepository;
     private final UserRepository userRepository;
@@ -26,8 +25,9 @@ public class SettingsService {
     public UserSettings getSettings(Long userId) {
         return userSettingsRepository.findByUserId(userId)
             .orElseGet(() -> {
-                UserSettings s = new UserSettings();
-                s.setUserId(userId);
+                User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                UserSettings s = UserSettings.builder().user(user).build();
                 return userSettingsRepository.save(s);
             });
     }
