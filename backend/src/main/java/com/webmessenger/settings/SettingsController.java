@@ -1,12 +1,14 @@
 package com.webmessenger.settings;
 
 import com.webmessenger.auth.UserPrincipal;
+import com.webmessenger.user.User;
 import com.webmessenger.user.UserSettings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -14,45 +16,48 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SettingsController {
 
-  private final SettingsService settingsService;
+    private final SettingsService settingsService;
 
-  @GetMapping
-  public ResponseEntity<UserSettings> get(
-      @AuthenticationPrincipal UserPrincipal principal) {
-    return ResponseEntity.ok(settingsService.getSettings(principal.getId()));
-  }
+    // GET /api/settings
+    @GetMapping
+    public ResponseEntity<UserSettings> get(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(settingsService.getSettings(principal.getId()));
+    }
 
-  @PatchMapping("/messaging")
-  public ResponseEntity<UserSettings> updateMessaging(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @RequestBody Map<String, String> body) {
-    UserSettings.MessagingPermission perm =
-        UserSettings.MessagingPermission.valueOf(body.get("permission"));
-    return ResponseEntity.ok(
-        settingsService.updateMessagingPermission(principal.getId(), perm));
-  }
+    // PUT /api/settings  { whoCanMessage, onlineVisibility }
+    @PutMapping
+    public ResponseEntity<UserSettings> update(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(settingsService.updateSettings(
+            principal.getId(),
+            body.get("whoCanMessage"),
+            body.get("onlineVisibility")));
+    }
 
-  @PatchMapping("/status-visibility")
-  public ResponseEntity<UserSettings> updateVisibility(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @RequestBody Map<String, String> body) {
-    UserSettings.StatusVisibility vis =
-        UserSettings.StatusVisibility.valueOf(body.get("visibility"));
-    return ResponseEntity.ok(
-        settingsService.updateStatusVisibility(principal.getId(), vis));
-  }
+    // GET /api/settings/blocked
+    @GetMapping("/blocked")
+    public ResponseEntity<List<User>> getBlocked(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(settingsService.getBlockedUsers(principal.getId()));
+    }
 
-  @PostMapping("/block/{targetId}")
-  public ResponseEntity<UserSettings> block(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @PathVariable Long targetId) {
-    return ResponseEntity.ok(settingsService.blockUser(principal.getId(), targetId));
-  }
+    // POST /api/settings/block/{userId}
+    @PostMapping("/block/{userId}")
+    public ResponseEntity<Void> block(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long userId) {
+        settingsService.blockUser(principal.getId(), userId);
+        return ResponseEntity.ok().build();
+    }
 
-  @DeleteMapping("/block/{targetId}")
-  public ResponseEntity<UserSettings> unblock(
-      @AuthenticationPrincipal UserPrincipal principal,
-      @PathVariable Long targetId) {
-    return ResponseEntity.ok(settingsService.unblockUser(principal.getId(), targetId));
-  }
+    // DELETE /api/settings/block/{userId}
+    @DeleteMapping("/block/{userId}")
+    public ResponseEntity<Void> unblock(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long userId) {
+        settingsService.unblockUser(principal.getId(), userId);
+        return ResponseEntity.ok().build();
+    }
 }
