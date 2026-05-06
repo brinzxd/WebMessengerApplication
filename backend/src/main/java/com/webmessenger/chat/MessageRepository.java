@@ -7,17 +7,19 @@ import java.util.List;
 
 public interface MessageRepository extends JpaRepository<Message, Long> {
 
-  /**
-   * Returns messages visible to the given user:
-   * - not deleted for all
-   * - not hidden by this specific user
-   */
-  @Query("SELECT m FROM Message m WHERE m.conversation.id = :convId " +
-      "AND m.deletedForAllAt IS NULL " +
-      "AND m.id NOT IN (" +
-      "  SELECT mh.message.id FROM MessageHidden mh WHERE mh.user.id = :userId" +
-      ") ORDER BY m.sentAt ASC")
-  List<Message> findVisibleMessages(
-      @Param("convId") Long conversationId,
-      @Param("userId") Long userId);
+    List<Message> findByConversationIdOrderBySentAtAsc(Long conversationId);
+
+    /**
+     * Returns messages visible to the given user:
+     * - not deleted for all
+     * - not hidden by this specific user
+     */
+    @Query("SELECT m FROM Message m WHERE m.conversation.id = :convId " +
+            "AND m.deletedForAllAt IS NULL " +
+            "AND m.id NOT IN (" +
+            "  SELECT mh.message.id FROM MessageHidden mh WHERE mh.user.id = :userId" +
+            ") ORDER BY m.sentAt ASC")
+    List<Message> findVisibleMessages(
+            @Param("convId") Long conversationId,
+            @Param("userId") Long userId);
 }
