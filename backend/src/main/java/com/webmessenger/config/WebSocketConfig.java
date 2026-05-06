@@ -37,8 +37,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+        registry.addEndpoint("/ws").setAllowedOriginPatterns("*");
     }
 
     @Override
@@ -46,7 +45,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                StompHeaderAccessor accessor =
+                        MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
                     List<String> authorization = accessor.getNativeHeader("Authorization");
                     if (authorization != null && !authorization.isEmpty()) {
@@ -56,7 +56,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             User user = userRepository.findByEmail(email).orElse(null);
                             if (user != null) {
                                 UsernamePasswordAuthenticationToken auth =
-                                        new UsernamePasswordAuthenticationToken(email, null, List.of());
+                                        new UsernamePasswordAuthenticationToken(
+                                                user.getId().toString(), null, List.of());
                                 accessor.setUser(auth);
                             }
                         }
