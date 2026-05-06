@@ -8,13 +8,18 @@ import java.util.Optional;
 
 public interface FriendRequestRepository extends JpaRepository<FriendRequest, Long> {
 
-  List<FriendRequest> findByReceiverIdAndStatus(Long receiverId, FriendRequest.Status status);
+    // All PENDING requests received by a user (incoming)
+    @Query("SELECT fr FROM FriendRequest fr WHERE fr.toUser.id = :userId AND fr.status = 'PENDING'")
+    List<FriendRequest> findPendingForUser(@Param("userId") Long userId);
 
-  List<FriendRequest> findBySenderIdAndStatus(Long senderId, FriendRequest.Status status);
+    // All PENDING requests sent by a user
+    @Query("SELECT fr FROM FriendRequest fr WHERE fr.fromUser.id = :userId AND fr.status = 'PENDING'")
+    List<FriendRequest> findSentByUser(@Param("userId") Long userId);
 
-  @Query("SELECT fr FROM FriendRequest fr WHERE " +
-      "((fr.sender.id = :u1 AND fr.receiver.id = :u2) OR " +
-      " (fr.sender.id = :u2 AND fr.receiver.id = :u1)) " +
-      "AND fr.status = 'PENDING'")
-  Optional<FriendRequest> findPendingBetween(@Param("u1") Long u1, @Param("u2") Long u2);
+    // Check if there is an existing pending request between two users (either direction)
+    @Query("SELECT fr FROM FriendRequest fr WHERE " +
+           "((fr.fromUser.id = :u1 AND fr.toUser.id = :u2) OR " +
+           " (fr.fromUser.id = :u2 AND fr.toUser.id = :u1)) " +
+           "AND fr.status = 'PENDING'")
+    Optional<FriendRequest> findPendingBetween(@Param("u1") Long u1, @Param("u2") Long u2);
 }
