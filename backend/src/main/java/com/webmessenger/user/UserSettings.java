@@ -13,20 +13,23 @@ import lombok.*;
 public class UserSettings {
 
     public enum MessagingPermission { EVERYONE, FRIENDS_ONLY, NO_ONE }
-    public enum OnlineVisibility { EVERYONE, FRIENDS_ONLY, NO_ONE }
+    public enum OnlineVisibility    { EVERYONE, FRIENDS_ONLY, NO_ONE }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false, unique = true)
-    private Long userId;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    private User user;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "who_can_message", nullable = false, length = 20)
+    @Builder.Default
     private MessagingPermission whoCanMessage = MessagingPermission.EVERYONE;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "online_visibility", nullable = false, length = 20)
+    @Builder.Default
     private OnlineVisibility onlineVisibility = OnlineVisibility.EVERYONE;
 }
