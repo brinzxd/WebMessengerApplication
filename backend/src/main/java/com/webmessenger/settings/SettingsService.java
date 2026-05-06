@@ -1,5 +1,9 @@
 package com.webmessenger.settings;
 
+import com.webmessenger.user.BlockedUser;
+import com.webmessenger.user.BlockedUserRepository;
+import com.webmessenger.user.User;
+import com.webmessenger.user.UserRepository;
 import com.webmessenger.user.UserSettings;
 import com.webmessenger.user.UserSettingsRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,54 +13,63 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class SettingsService {
 
-  private final UserSettingsRepository userSettingsRepository;
+    private final UserSettingsRepository userSettingsRepository;
+    private final BlockedUserRepository blockedUserRepository;
+    private final UserRepository userRepository;
 
-  public UserSettings getSettings(Long userId) {
-    return userSettingsRepository.findByUserId(userId)
-        .orElseGet(() -> {
-          UserSettings s = new UserSettings();
-          s.setUserId(userId);
-          return userSettingsRepository.save(s);
-        });
-  }
-
-  @Transactional
-  public UserSettings updateMessagingPermission(
-      Long userId, UserSettings.MessagingPermission permission) {
-    UserSettings s = getSettings(userId);
-    s.setWhoCanMessage(permission);
-    return userSettingsRepository.save(s);
-  }
-
-  @Transactional
-  public UserSettings updateStatusVisibility(
-      Long userId, UserSettings.StatusVisibility visibility) {
-    UserSettings s = getSettings(userId);
-    s.setWhoCanSeeStatus(visibility);
-    return userSettingsRepository.save(s);
-  }
-
-  @Transactional
-  public UserSettings blockUser(Long userId, Long targetId) {
-    UserSettings s = getSettings(userId);
-    List<Long> blocked = s.getBlockedUserIds();
-    if (!blocked.contains(targetId)) {
-      blocked.add(targetId);
-      s.setBlockedUserIds(blocked);
-      return userSettingsRepository.save(s);
+    public UserSettings getSettings(Long userId) {
+        return userSettingsRepository.findByUserId(userId)
+            .orElseGet(() -> {
+                UserSettings s = new UserSettings();
+                s.setUserId(userId);
+                return userSettingsRepository.save(s);
+            });
     }
-    return s;
-  }
 
-  @Transactional
-  public UserSettings unblockUser(Long userId, Long targetId) {
-    UserSettings s = getSettings(userId);
-    s.getBlockedUserIds().remove(targetId);
-    return userSettingsRepository.save(s);
-  }
+    @Transactional
+    public UserSettings updateSettings(Long userId, String whoCanMessage, String onlineVisibility) {
+        UserSettings s = getSettings(userId);
+        if (whoCanMessage != null) {
+            s.setWhoCanMessage(UserSettings.MessagingPermission.valueOf(whoCanMessage));
+        }
+        if (onlineVisibility != null) {
+            s.setOnlineVisibility(UserSettings.OnlineVisibility.valueOf(onlineVisibility));
+        }
+        return userSettingsRepository.save(s);
+    }
+
+    public List<User> getBlockedUsers(Long userId) {
+        return blockedUserRepository.findByBlockerId(userId)
+            .stream()
+            .map(BlockedUser::getBlocked)
+            .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void blockUser(Long blockerId, Long blockedId) {
+        if (blockedUserRepository.existsByBlockerIdAndBlockedId(blockerId, blockedId)) return;
+        User blocker = userRepository.findById(blockerId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        User blocked = userRepository.findById(blockedId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        BlockedUser b = new BlockedUser();
+        b.setBlocker(blocker);
+        b.setBlocked(blocked);
+        blockedUserRepository.save(b);
+    }
+
+    @Transactional
+    public void unblockUser(Long blockerId, Long blockedId) {
+        blockedUserRepository.deleteByBlockerIdAndBlockedId(blockerId, blockedId);
+    }
+
+    public boolean isBlocked(Long senderId, Long receiverId) {
+        return blockedUserRepository.existsByBlockerIdAndBlockedId(receiverId, senderId);
+    }
 }
