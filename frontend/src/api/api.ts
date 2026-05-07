@@ -12,8 +12,8 @@ api.interceptors.request.use((config) => {
 export default api;
 
 // Auth
-export const login = (nickname: string, password: string) =>
-  api.post('/auth/login', { nickname, password }).then((r) => r.data);
+export const login = (email: string, password: string) =>
+    api.post('/auth/login', { email, password }).then((r) => r.data);
 
 export const register = (nickname: string, email: string, password: string) =>
     api.post('/auth/register', { nickname, email, password }).then((r) => r.data);
