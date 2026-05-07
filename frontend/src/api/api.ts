@@ -15,8 +15,8 @@ export default api;
 export const login = (nickname: string, password: string) =>
   api.post('/auth/login', { nickname, password }).then((r) => r.data);
 
-export const register = (nickname: string, password: string) =>
-  api.post('/auth/register', { nickname, password }).then((r) => r.data);
+export const register = (nickname: string, email: string, password: string) =>
+    api.post('/auth/register', { nickname, email, password }).then((r) => r.data);
 
 // Chat
 export const getConversations = () =>
