@@ -22,14 +22,14 @@ public class ChatController {
 
     /** REST: list all conversations for current user */
     @GetMapping("/conversations")
-    public ResponseEntity<List<Conversation>> conversations(
+    public ResponseEntity<List<ConversationDto>> conversations(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(chatService.getConversations(principal.getId()));
     }
 
     /** REST: get or create a direct conversation with another user */
     @PostMapping("/conversations")
-    public ResponseEntity<Conversation> openConversation(
+    public ResponseEntity<ConversationDto> openConversation(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody Map<String, Long> body) {
         Long otherUserId = body.get("userId");
@@ -38,7 +38,7 @@ public class ChatController {
 
     /** REST: get messages in a conversation */
     @GetMapping("/conversations/{id}/messages")
-    public ResponseEntity<List<Message>> messages(
+    public ResponseEntity<List<MessageDto>> messages(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
         return ResponseEntity.ok(chatService.getMessages(principal.getId(), id));
@@ -46,11 +46,11 @@ public class ChatController {
 
     /** REST: send a message (also broadcasts via WebSocket) */
     @PostMapping("/conversations/{id}/messages")
-    public ResponseEntity<Message> sendMessageRest(
+    public ResponseEntity<MessageDto> sendMessageRest(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestBody Map<String, String> body) {
-        Message msg = chatService.sendMessage(principal.getId(), id, body.get("content"));
+        MessageDto msg = chatService.sendMessage(principal.getId(), id, body.get("content"));
         return ResponseEntity.ok(msg);
     }
 
@@ -63,21 +63,21 @@ public class ChatController {
         chatService.sendMessage(senderId, conversationId, payload.get("content"));
     }
 
-    /** REST: delete message for current user only */
+    /** REST: delete a message for me only */
     @DeleteMapping("/messages/{messageId}/for-me")
     public ResponseEntity<Void> deleteForMe(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long messageId) {
         chatService.deleteMessageForMe(principal.getId(), messageId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok().build();
     }
 
-    /** REST: delete message for both participants */
+    /** REST: delete a message for everyone */
     @DeleteMapping("/messages/{messageId}/for-all")
     public ResponseEntity<Void> deleteForAll(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long messageId) {
         chatService.deleteMessageForAll(principal.getId(), messageId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok().build();
     }
 }
