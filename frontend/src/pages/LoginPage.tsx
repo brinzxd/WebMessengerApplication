@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 export default function LoginPage() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
-  const [nickname, setNickname] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -14,11 +14,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-      const data = await login(nickname, password);
+      const data = await login(email, password);
       setAuth(data.token, data.userId, data.nickname);
       navigate('/chats');
-    } catch {
-      setError('Invalid nickname or password');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.response?.data || 'Invalid email or password.';
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
@@ -29,10 +30,10 @@ export default function LoginPage() {
         <h2>Sign In</h2>
         {error && <p className="error">{error}</p>}
         <input
-          type="text"
-          placeholder="Nickname"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
