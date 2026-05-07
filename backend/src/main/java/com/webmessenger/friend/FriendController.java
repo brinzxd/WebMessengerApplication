@@ -22,7 +22,7 @@ public class FriendController {
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(
-            friendService.sendRequest(principal.getId(), body.get("nickname")));
+                friendService.sendRequest(principal.getId(), body.get("nickname")));
     }
 
     // POST /api/friends/request/{id}/accept
@@ -45,31 +45,31 @@ public class FriendController {
 
     // GET /api/friends/requests/incoming
     @GetMapping("/requests/incoming")
-    public ResponseEntity<List<FriendRequest>> incoming(
+    public ResponseEntity<List<FriendRequestDto>> incoming(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(friendService.getIncomingRequests(principal.getId()));
     }
 
     // GET /api/friends/requests/sent
     @GetMapping("/requests/sent")
-    public ResponseEntity<List<FriendRequest>> sent(
+    public ResponseEntity<List<FriendRequestDto>> sent(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(friendService.getSentRequests(principal.getId()));
     }
 
     // GET /api/friends
     @GetMapping
-    public ResponseEntity<List<Friendship>> list(
+    public ResponseEntity<List<FriendDto>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(friendService.getFriends(principal.getId()));
     }
 
-    // DELETE /api/friends/{id}
-    @DeleteMapping("/{id}")
+    // DELETE /api/friends/{friendshipId}
+    @DeleteMapping("/{friendshipId}")
     public ResponseEntity<Void> remove(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable Long id) {
-        friendService.removeFriend(id, principal.getId());
+            @PathVariable Long friendshipId) {
+        friendService.removeFriend(friendshipId, principal.getId());
         return ResponseEntity.ok().build();
     }
 }
