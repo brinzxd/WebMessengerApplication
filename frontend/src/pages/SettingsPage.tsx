@@ -10,7 +10,7 @@ interface Settings {
 interface BlockedUser {
   id: number;
   nickname: string;
-  avatar: string | null;
+  avatarUrl: string | null;
 }
 
 export default function SettingsPage() {
@@ -68,20 +68,27 @@ export default function SettingsPage() {
               <option value="NO_ONE">No one</option>
             </select>
           </label>
-          <button onClick={handleSave}>{saved ? 'Saved!' : 'Save changes'}</button>
+          <button onClick={handleSave}>Save</button>
+          {saved && <span className="saved-msg">Saved!</span>}
         </div>
+
         <div className="settings-section">
           <h3>Blocked Users</h3>
-          {blocked.length === 0 && <p className="empty">No blocked users</p>}
-          {blocked.map((u) => (
-            <div key={u.id} className="blocked-item">
-              <div className="friend-avatar">
-                {u.avatar ? <img src={u.avatar} alt="" /> : <span>{u.nickname[0]}</span>}
+          {blocked.length === 0 ? (
+            <p>No blocked users</p>
+          ) : (
+            blocked.map((u) => (
+              <div key={u.id} className="blocked-user">
+                {u.avatarUrl ? (
+                  <img src={u.avatarUrl} alt={u.nickname} className="avatar-sm" />
+                ) : (
+                  <div className="avatar-placeholder-sm">{u.nickname[0]}</div>
+                )}
+                <span>{u.nickname}</span>
+                <button onClick={() => handleUnblock(u.id)}>Unblock</button>
               </div>
-              <strong>{u.nickname}</strong>
-              <button onClick={() => handleUnblock(u.id)}>Unblock</button>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
