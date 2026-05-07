@@ -3,6 +3,8 @@ package com.webmessenger.friend;
 import com.webmessenger.user.User;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.Instant;
 
 @Data
@@ -28,6 +30,10 @@ public class FriendRequest {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     public enum Status {
         PENDING, ACCEPTED, DECLINED
