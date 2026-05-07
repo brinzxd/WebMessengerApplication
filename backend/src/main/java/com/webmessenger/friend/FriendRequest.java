@@ -23,7 +23,7 @@ public class FriendRequest {
     private User toUser;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "varchar(20)")
     private Status status = Status.PENDING;
 
     @Column(name = "created_at", nullable = false)
