@@ -24,12 +24,12 @@ public class UserSettings {
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "who_can_message", nullable = false, length = 20)
+    @Column(name = "who_can_message", nullable = false, columnDefinition = "varchar(20)")
     @Builder.Default
     private MessagingPermission whoCanMessage = MessagingPermission.EVERYONE;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "online_visibility", nullable = false, length = 20)
+    @Column(name = "online_visibility", nullable = false, columnDefinition = "varchar(20)")
     @Builder.Default
     private OnlineVisibility onlineVisibility = OnlineVisibility.EVERYONE;
 }
