@@ -22,6 +22,8 @@ export default function App() {
         <Route path="/chats" element={<PrivateLayout><ChatsPage /></PrivateLayout>} />
         <Route path="/friends" element={<PrivateLayout><FriendsPage /></PrivateLayout>} />
         <Route path="/profile" element={<PrivateLayout><ProfilePage /></PrivateLayout>} />
+        {/* Public profile view for other users */}
+        <Route path="/profile/:userId" element={<PrivateLayout><ProfilePage /></PrivateLayout>} />
         <Route path="/settings" element={<PrivateLayout><SettingsPage /></PrivateLayout>} />
         <Route path="*" element={<Navigate to="/chats" replace />} />
       </Routes>

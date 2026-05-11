@@ -29,13 +29,24 @@ export default function ChatsPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [sendError, setSendError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const selectedRef = useRef<Conversation | null>(null);
+
+  // Keep selectedRef in sync so WS handler always sees latest
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   useEffect(() => {
     getConversations().then(setConversations);
     const client = connectWS((msg: IMessage) => {
       const newMsg: Message = JSON.parse(msg.body);
-      setMessages((prev) => [...prev, newMsg]);
+      setMessages((prev) => {
+        // Avoid duplicate if REST response already added this message
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
       getConversations().then(setConversations);
     });
     return () => { disconnectWS(); };
@@ -44,6 +55,7 @@ export default function ChatsPage() {
   useEffect(() => {
     if (selected) {
       getMessages(selected.id).then(setMessages);
+      setSendError('');
     }
   }, [selected]);
 
@@ -53,10 +65,25 @@ export default function ChatsPage() {
 
   const handleSend = async () => {
     if (!text.trim() || !selected) return;
-    await sendMessage(selected.id, text);
-    sendWsMessage(selected.id, text);
+    const content = text.trim();
     setText('');
-    getMessages(selected.id).then(setMessages);
+    try {
+      // Send only via REST; WebSocket subscription will push the message back
+      await sendMessage(selected.id, content);
+      setSendError('');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.response?.data || '';
+      if (typeof msg === 'string' && msg.length > 0) {
+        setSendError(msg);
+      } else if (err?.response?.status === 403) {
+        setSendError("You can't send messages to this user due to their privacy settings.");
+      } else if (err?.response?.status === 451) {
+        setSendError("You are blocked by this user or have blocked them.");
+      } else {
+        setSendError('Failed to send message.');
+      }
+      setText(content); // restore text so user doesn't lose it
+    }
   };
 
   const handleDelete = async (forAll: boolean) => {
@@ -98,13 +125,14 @@ export default function ChatsPage() {
                   className={`message ${m.senderId === userId ? 'mine' : 'theirs'}`}
                   onContextMenu={(e) => { e.preventDefault(); setDeleteTarget(m); }}
                 >
-                  {m.deletedForAll ? <em>Message deleted</em> : <span>{m.content}</span>}
+                  {m.deletedForAll ? <em>Message deleted</em> : <span className="message-text">{m.content}</span>}
                   <small>{new Date(m.sentAt).toLocaleTimeString()}</small>
                 </div>
               ))}
               <div ref={bottomRef} />
             </div>
             <div className="message-input">
+              {sendError && <div className="send-error">{sendError}</div>}
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}

@@ -58,9 +58,12 @@ export const declineFriendRequest = (requestId: number) =>
 export const removeFriend = (friendshipId: number) =>
   api.delete(`/friends/${friendshipId}`).then((r) => r.data);
 
-// User / Profile
+// User / Profile / Search
 export const getProfile = (userId: number) =>
   api.get(`/users/${userId}/profile`).then((r) => r.data);
+
+export const searchUsers = (nickname: string) =>
+  api.get('/users/search', { params: { nickname } }).then((r) => r.data);
 
 export const updateNickname = (nickname: string) =>
   api.put('/users/me/nickname', { nickname }).then((r) => r.data);

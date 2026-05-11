@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { getProfile, updateNickname, uploadAvatar } from '../api/api';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getProfile, updateNickname, uploadAvatar, sendFriendRequest, startConversation, blockUser } from '../api/api';
 import { useAuthStore } from '../store/authStore';
 import Sidebar from '../components/Sidebar';
 
@@ -15,18 +16,24 @@ interface Profile {
 }
 
 export default function ProfilePage() {
-  const { userId } = useAuthStore((s) => s);
+  const { userId: authUserId } = useAuthStore((s) => s);
+  const params = useParams<{ userId?: string }>();
+  const navigate = useNavigate();
+  const viewedUserId = params.userId ? Number(params.userId) : authUserId;
+  const isOwnProfile = viewedUserId === authUserId;
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const [error, setError] = useState('');
+  const [actionMsg, setActionMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = () => getProfile(userId!).then(setProfile);
+  const load = () => getProfile(viewedUserId!).then(setProfile);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [viewedUserId]);
 
   const handleNickname = async () => {
     if (!newNickname.trim()) return;
@@ -46,6 +53,42 @@ export default function ProfilePage() {
     load();
   };
 
+  const handleAddFriend = async () => {
+    if (!profile) return;
+    try {
+      await sendFriendRequest(profile.nickname);
+      setActionMsg('Friend request sent!');
+    } catch {
+      setActionMsg('Request already sent or unavailable');
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!viewedUserId) return;
+    try {
+      const conv = await startConversation(viewedUserId);
+      navigate('/chats', { state: { conversationId: conv.id } });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.response?.data || '';
+      if (typeof msg === 'string' && msg.length > 0) {
+        setActionMsg(msg);
+      } else if (err?.response?.status === 403) {
+        setActionMsg('This user only accepts messages from friends.');
+      } else if (err?.response?.status === 451) {
+        setActionMsg('You cannot message this user (blocked).');
+      } else {
+        setActionMsg('Cannot start conversation with this user.');
+      }
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!viewedUserId || !profile) return;
+    if (!window.confirm(`Block ${profile.nickname}?`)) return;
+    await blockUser(viewedUserId);
+    setActionMsg(`${profile.nickname} has been blocked.`);
+  };
+
   if (!profile) return <div className="loading">Loading...</div>;
 
   return (
@@ -53,23 +96,29 @@ export default function ProfilePage() {
       <Sidebar active="profile" />
       <div className="main-content">
         <div className="profile-header">
-          <div className="avatar-wrapper" onClick={() => fileRef.current?.click()}>
+          <div
+            className="avatar-wrapper"
+            onClick={() => isOwnProfile && fileRef.current?.click()}
+            style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
+          >
             {profile.avatarUrl ? (
               <img src={profile.avatarUrl} alt="avatar" className="avatar-lg" />
             ) : (
               <div className="avatar-placeholder-lg">{profile.nickname[0]}</div>
             )}
-            <div className="avatar-overlay">Change</div>
+            {isOwnProfile && <div className="avatar-overlay">Change</div>}
           </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleAvatar}
-          />
+          {isOwnProfile && (
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleAvatar}
+            />
+          )}
           <div className="profile-info">
-            {editing ? (
+            {isOwnProfile && editing ? (
               <div className="nickname-edit">
                 <input
                   value={newNickname}
@@ -83,9 +132,18 @@ export default function ProfilePage() {
             ) : (
               <div className="nickname-display">
                 <h2>{profile.nickname}</h2>
-                <button onClick={() => { setNewNickname(profile.nickname); setEditing(true); }}>
-                  Edit
-                </button>
+                {isOwnProfile ? (
+                  <button onClick={() => { setNewNickname(profile.nickname); setEditing(true); }}>
+                    Edit
+                  </button>
+                ) : (
+                  <div className="profile-actions">
+                    <button onClick={handleAddFriend}>Add Friend</button>
+                    <button onClick={handleMessage}>Message</button>
+                    <button className="danger" onClick={handleBlock}>Block</button>
+                    {actionMsg && <p className="action-msg">{actionMsg}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>

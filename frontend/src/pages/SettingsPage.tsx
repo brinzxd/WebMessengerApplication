@@ -20,9 +20,13 @@ export default function SettingsPage() {
   });
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
   const [saved, setSaved] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const load = () => {
-    getSettings().then(setSettings);
+    getSettings().then((s: Settings) => {
+      setSettings(s);
+      setLoaded(true);
+    });
     getBlockedUsers().then(setBlocked);
   };
 
@@ -38,6 +42,9 @@ export default function SettingsPage() {
     await unblockUser(userId);
     load();
   };
+
+  // Don't render selects until real values are loaded to avoid flicker
+  if (!loaded) return <div className="loading">Loading...</div>;
 
   return (
     <div className="app-layout">
