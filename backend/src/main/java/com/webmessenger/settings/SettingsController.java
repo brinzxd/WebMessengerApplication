@@ -1,8 +1,6 @@
 package com.webmessenger.settings;
 
 import com.webmessenger.auth.UserPrincipal;
-import com.webmessenger.user.User;
-import com.webmessenger.user.UserSettings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,30 +13,29 @@ import java.util.Map;
 @RequestMapping("/api/settings")
 @RequiredArgsConstructor
 public class SettingsController {
-
     private final SettingsService settingsService;
 
     // GET /api/settings
     @GetMapping
-    public ResponseEntity<UserSettings> get(
+    public ResponseEntity<SettingsResponse> get(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(settingsService.getSettings(principal.getId()));
     }
 
-    // PUT /api/settings  { whoCanMessage, onlineVisibility }
+    // PUT /api/settings { whoCanMessage, onlineVisibility }
     @PutMapping
-    public ResponseEntity<UserSettings> update(
+    public ResponseEntity<SettingsResponse> update(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(settingsService.updateSettings(
-            principal.getId(),
-            body.get("whoCanMessage"),
-            body.get("onlineVisibility")));
+                principal.getId(),
+                body.get("whoCanMessage"),
+                body.get("onlineVisibility")));
     }
 
     // GET /api/settings/blocked
     @GetMapping("/blocked")
-    public ResponseEntity<List<User>> getBlocked(
+    public ResponseEntity<List<BlockedUserResponse>> getBlocked(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(settingsService.getBlockedUsers(principal.getId()));
     }
