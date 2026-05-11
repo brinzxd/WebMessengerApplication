@@ -22,32 +22,40 @@ public class SettingsService {
     private final BlockedUserRepository blockedUserRepository;
     private final UserRepository userRepository;
 
-    public UserSettings getSettings(Long userId) {
-        return userSettingsRepository.findByUserId(userId)
+    public SettingsResponse getSettings(Long userId) {
+        UserSettings s = userSettingsRepository.findByUserId(userId)
             .orElseGet(() -> {
                 User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-                UserSettings s = UserSettings.builder().user(user).build();
-                return userSettingsRepository.save(s);
+                UserSettings created = UserSettings.builder().user(user).build();
+                return userSettingsRepository.save(created);
             });
+        return toResponse(s);
     }
 
     @Transactional
-    public UserSettings updateSettings(Long userId, String whoCanMessage, String onlineVisibility) {
-        UserSettings s = getSettings(userId);
+    public SettingsResponse updateSettings(Long userId, String whoCanMessage, String onlineVisibility) {
+        UserSettings s = userSettingsRepository.findByUserId(userId)
+            .orElseGet(() -> {
+                User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                UserSettings created = UserSettings.builder().user(user).build();
+                return userSettingsRepository.save(created);
+            });
         if (whoCanMessage != null) {
             s.setWhoCanMessage(UserSettings.MessagingPermission.valueOf(whoCanMessage));
         }
         if (onlineVisibility != null) {
             s.setOnlineVisibility(UserSettings.OnlineVisibility.valueOf(onlineVisibility));
         }
-        return userSettingsRepository.save(s);
+        return toResponse(userSettingsRepository.save(s));
     }
 
-    public List<User> getBlockedUsers(Long userId) {
+    public List<BlockedUserResponse> getBlockedUsers(Long userId) {
         return blockedUserRepository.findByBlockerId(userId)
             .stream()
             .map(BlockedUser::getBlocked)
+            .map(u -> new BlockedUserResponse(u.getId(), u.getNickname(), u.getAvatarUrl()))
             .collect(Collectors.toList());
     }
 
@@ -71,5 +79,12 @@ public class SettingsService {
 
     public boolean isBlocked(Long senderId, Long receiverId) {
         return blockedUserRepository.existsByBlockerIdAndBlockedId(receiverId, senderId);
+    }
+
+    private SettingsResponse toResponse(UserSettings s) {
+        return new SettingsResponse(
+            s.getWhoCanMessage().name(),
+            s.getOnlineVisibility().name()
+        );
     }
 }
