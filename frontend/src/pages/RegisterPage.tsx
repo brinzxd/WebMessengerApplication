@@ -10,23 +10,27 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       const data = await register(nickname, email, password);
       setAuth(data.token, data.userId, data.nickname);
       navigate('/chats');
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data || 'Registration failed. Please try again.';
+      const msg = err?.response?.data?.message || err?.response?.data || 'Registration failed.';
       setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="auth-container">
-      <h1>WebMessenger</h1>
+      <div className="auth-logo">WebMessenger</div>
       <form onSubmit={handleSubmit} className="auth-form">
         <h2>Create Account</h2>
         {error && <p className="error">{error}</p>}
@@ -36,6 +40,7 @@ export default function RegisterPage() {
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
           required
+          autoComplete="username"
         />
         <input
           type="email"
@@ -43,6 +48,7 @@ export default function RegisterPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          autoComplete="email"
         />
         <input
           type="password"
@@ -50,8 +56,11 @@ export default function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          autoComplete="new-password"
         />
-        <button type="submit">Register</button>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Creating account…' : 'Register'}
+        </button>
         <p>Already have an account? <Link to="/login">Sign In</Link></p>
       </form>
     </div>

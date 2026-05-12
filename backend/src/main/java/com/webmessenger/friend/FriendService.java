@@ -66,9 +66,8 @@ public class FriendService {
         return friendRequestRepository.findPendingForUser(userId).stream()
                 .map(r -> new FriendRequestDto(
                         r.getId(),
-                        r.getFromUser().getId(),
-                        r.getFromUser().getNickname(),
-                        r.getFromUser().getAvatarUrl(),
+                        r.getFromUser().getId(), r.getFromUser().getNickname(), r.getFromUser().getAvatarUrl(),
+                        r.getToUser().getId(), r.getToUser().getNickname(),
                         r.getCreatedAt()))
                 .collect(Collectors.toList());
     }
@@ -77,9 +76,8 @@ public class FriendService {
         return friendRequestRepository.findSentByUser(userId).stream()
                 .map(r -> new FriendRequestDto(
                         r.getId(),
-                        r.getFromUser().getId(),
-                        r.getFromUser().getNickname(),
-                        r.getFromUser().getAvatarUrl(),
+                        r.getFromUser().getId(), r.getFromUser().getNickname(), r.getFromUser().getAvatarUrl(),
+                        r.getToUser().getId(), r.getToUser().getNickname(),
                         r.getCreatedAt()))
                 .collect(Collectors.toList());
     }

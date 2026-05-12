@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +33,19 @@ public class UserService {
 
     @Value("${minio.endpoint}")
     private String minioEndpoint;
+
+    public List<Map<String, Object>> searchUsers(String nickname, Long excludeUserId) {
+        return userRepository.findByNicknameContainingIgnoreCase(nickname).stream()
+                .filter(u -> !u.getId().equals(excludeUserId))
+                .map(u -> {
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("id", u.getId());
+                    result.put("nickname", u.getNickname());
+                    result.put("avatarUrl", u.getAvatarUrl() != null ? u.getAvatarUrl() : "");
+                    return result;
+                })
+                .collect(Collectors.toList());
+    }
 
     public Map<String, Object> getProfile(Long userId) {
         User user = userRepository.findById(userId)

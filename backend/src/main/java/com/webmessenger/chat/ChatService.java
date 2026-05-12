@@ -1,11 +1,14 @@
 package com.webmessenger.chat;
 
+import com.webmessenger.friend.FriendshipRepository;
+import com.webmessenger.user.BlockedUserRepository;
 import com.webmessenger.user.User;
 import com.webmessenger.user.UserRepository;
 import com.webmessenger.user.UserSettings;
 import com.webmessenger.user.UserSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,8 @@ public class ChatService {
     private final UserRepository userRepository;
     private final UserSettingsRepository userSettingsRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final BlockedUserRepository blockedUserRepository;
+    private final FriendshipRepository friendshipRepository;
 
     private MessageDto toDto(Message m) {
         return new MessageDto(
@@ -32,7 +37,8 @@ public class ChatService {
                 m.getSender().getId(),
                 m.getContent(),
                 m.getSentAt(),
-                m.getDeletedForAllAt() != null);
+                m.getDeletedForAllAt() != null,
+                m.getConversation().getId());
     }
 
     @Transactional
@@ -66,11 +72,18 @@ public class ChatService {
     }
 
     private void checkMessagingAllowed(Long senderId, User receiver) {
+        if (blockedUserRepository.existsByBlockerIdAndBlockedId(receiver.getId(), senderId) ||
+            blockedUserRepository.existsByBlockerIdAndBlockedId(senderId, receiver.getId())) {
+            throw new ResponseStatusException(HttpStatusCode.valueOf(451), "Blocked");
+        }
         UserSettings settings = userSettingsRepository.findByUserId(receiver.getId()).orElse(null);
         if (settings == null) return;
         switch (settings.getWhoCanMessage()) {
             case NO_ONE -> throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User does not accept messages");
-            case FRIENDS_ONLY -> { /* TODO: check friendship */ }
+            case FRIENDS_ONLY -> {
+                if (!friendshipRepository.existsBetween(senderId, receiver.getId()))
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only friends can message this user");
+            }
             default -> { /* EVERYONE - allow */ }
         }
     }
