@@ -41,6 +41,25 @@
 /* ---------- Reset ---------- */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ---- Global scrollbar style ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 58, 237, 0.25) transparent;
+}
+*::-webkit-scrollbar         { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track   { background: transparent; }
+*::-webkit-scrollbar-thumb   {
+  background: rgba(124, 58, 237, 0.28);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.5); }
+*::-webkit-scrollbar-corner  { background: transparent; }
+
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
@@ -51,6 +70,8 @@ body {
   color: var(--text);
   height: 100dvh;
   overflow: hidden;
+  overflow-x: hidden;
+  max-width: 100vw;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -58,6 +79,8 @@ body {
   height: 100dvh;
   display: flex;
   width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 /* ---------- Avatar ---------- */
@@ -234,22 +257,7 @@ body {
   box-shadow: 0 0 16px rgba(124, 58, 237, 0.25), inset 0 0 0 1px rgba(124, 58, 237, 0.2);
 }
 
-.sidebar-logout {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-3);
-  font-size: 1.35rem;
-  width: 46px;
-  height: 46px;
-  border-radius: var(--r);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 0.6rem;
-  transition: background var(--t), color var(--t);
-}
-.sidebar-logout:hover { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+/* sidebar-logout removed — Sign Out moved to Settings page */
 
 /* ---------- Main Content ---------- */
 .main-content {
@@ -257,6 +265,8 @@ body {
   padding: 1.5rem 2rem;
   overflow-y: auto;
   min-width: 0;
+  position: relative;
+  overflow-x: hidden;
 }
 
 /* ---------- Chat List ---------- */
@@ -322,6 +332,8 @@ body {
   display: flex;
   flex-direction: column;
   background: transparent;
+  position: relative;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -352,19 +364,15 @@ body {
   min-width: 0;
 }
 
-/* Scrollbar */
-.messages-container::-webkit-scrollbar,
-.chat-list::-webkit-scrollbar,
-.main-content::-webkit-scrollbar { width: 4px; }
-.messages-container::-webkit-scrollbar-track,
-.chat-list::-webkit-scrollbar-track,
-.main-content::-webkit-scrollbar-track { background: transparent; }
-.messages-container::-webkit-scrollbar-thumb,
-.chat-list::-webkit-scrollbar-thumb,
-.main-content::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
-  border-radius: var(--r-full);
-}
+/* Horizontal scroll locked on all major containers */
+.app-layout,
+.chat-window,
+.chat-list,
+.messages-container,
+.main-content,
+.sidebar,
+.profile-overlay,
+.profile-overlay-panel { overflow-x: hidden; }
 
 .message {
   max-width: 72%;
@@ -441,9 +449,13 @@ body {
   min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
+  overflow-x: hidden;
   outline: none;
   transition: border-color var(--t), box-shadow var(--t);
+  /* Hide scrollbar while keeping scroll functionality */
+  scrollbar-width: none;
 }
+.message-input textarea::-webkit-scrollbar { display: none; }
 .message-input textarea:focus {
   border-color: rgba(124,58,237,0.45);
   box-shadow: 0 0 0 3px rgba(124,58,237,0.1);
@@ -876,6 +888,109 @@ button.danger:hover {
 }
 .modal p { font-size: 1rem; font-weight: 500; }
 
+/* ---------- Profile Overlay ---------- */
+.profile-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: stretch;
+}
+
+.profile-overlay-panel {
+  flex: 1;
+  background: rgba(14, 10, 24, 0.97);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: overlaySlideIn 0.22s var(--t-spring) both;
+}
+
+@keyframes overlaySlideIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.overlay-back {
+  background: none !important;
+  border: none !important;
+  color: var(--accent-3) !important;
+  font-size: 1.3rem !important;
+  cursor: pointer !important;
+  padding: 0.2rem 0.5rem !important;
+  border-radius: var(--r-sm) !important;
+  transform: none !important;
+  display: flex !important;
+  align-items: center;
+  transition: opacity var(--t);
+}
+.overlay-back:hover { opacity: 0.75; transform: none !important; }
+
+.overlay-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1.5rem 1.5rem;
+  gap: 0.6rem;
+}
+
+.overlay-nickname { font-size: 1.3rem; font-weight: 700; }
+.overlay-sub { color: var(--text-3); font-size: 0.85rem; }
+
+.overlay-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.overlay-friends {
+  width: 100%;
+  margin-top: 1.25rem;
+}
+.overlay-friends h3 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 0.6rem;
+}
+.overlay-friends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.overlay-friend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background var(--t);
+}
+.overlay-friend-item:hover { background: var(--glass-hover); }
+.overlay-friend-item span { font-size: 0.9rem; }
+
 /* ---------- Loading ---------- */
 .loading {
   display: flex;
@@ -910,16 +1025,22 @@ button.danger:hover {
 
 /* Mobile */
 @media (max-width: 680px) {
-  body { overflow: hidden; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
 
-  /* Sidebar becomes bottom tab bar */
+  /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
+  input, textarea, select { font-size: 16px; }
+
+  /* Sidebar → bottom tab bar */
   .sidebar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     width: 100%;
-    height: 60px;
+    height: 56px;
     flex-direction: row;
     padding: 0 0.5rem;
     border-right: none;
@@ -936,43 +1057,38 @@ button.danger:hover {
     gap: 0;
   }
   .sidebar-nav li { flex: 1; }
-  .sidebar-nav li a {
-    height: 48px;
-    border-radius: var(--r);
-    font-size: 1.4rem;
-  }
-  .sidebar-logout {
-    height: 48px;
-    width: 48px;
-    margin: 0;
-  }
+  .sidebar-nav li a { height: 48px; border-radius: var(--r); font-size: 1.4rem; }
 
-  /* App layout stacks vertically */
+  /* App layout */
   .app-layout {
     flex-direction: column;
-    padding-bottom: 60px;
+    padding-bottom: 56px;
+    height: 100%;
   }
 
-  /* Chat list full-width, hidden when chat is open */
+  /* Chat list - normal flex child, hidden when chat open */
   .chat-list {
     width: 100%;
     flex: 1;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    min-height: 0;
   }
   .chat-list.mobile-hidden { display: none; }
 
-  /* Chat window full-screen */
+  /* Chat window — fixed to viewport so keyboard doesn't push header off screen */
   .chat-window {
-    width: 100%;
-    flex: 1;
-    position: absolute;
-    inset: 0;
-    bottom: 60px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 56px;
     z-index: 50;
+    display: flex;
+    flex-direction: column;
     background: var(--bg);
+    overflow: hidden;
   }
-  .chat-window.mobile-hidden { display: none; }
+  .chat-window.mobile-hidden { display: none !important; }
 
   /* Show back button */
   .back-btn { display: flex; }
@@ -994,7 +1110,23 @@ button.danger:hover {
 
   /* Friends */
   .page-header { flex-direction: column; align-items: flex-start; }
-  .add-friend input { width: 100%; }
-  .friend-actions { gap: 0.3rem; }
-  .friend-actions button { padding: 0.4rem 0.65rem; font-size: 0.78rem; }
+
+  /* Request items — wrap buttons below name on mobile */
+  .request-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .request-item .friend-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .request-item .friend-actions {
+    width: 100%;
+    margin-top: 0.4rem;
+    justify-content: flex-end;
+  }
+  .request-item .friend-actions button {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+  }
 }

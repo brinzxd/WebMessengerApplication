@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getSettings, updateSettings, getBlockedUsers, unblockUser } from '../api/api';
+import { useAuthStore } from '../store/authStore';
 import Sidebar from '../components/Sidebar';
 import Avatar from '../components/Avatar';
 
@@ -15,6 +17,8 @@ interface BlockedUser {
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
+  const logout = useAuthStore((s) => s.logout);
   const [settings, setSettings] = useState<Settings>({ whoCanMessage: 'EVERYONE', onlineVisibility: 'EVERYONE' });
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
   const [saved, setSaved] = useState(false);
@@ -41,6 +45,12 @@ export default function SettingsPage() {
   const handleUnblock = async (userId: number) => {
     await unblockUser(userId);
     load();
+  };
+
+  const handleSignOut = () => {
+    if (!window.confirm('Sign out of your account?')) return;
+    logout();
+    navigate('/login');
   };
 
   if (!loaded) return <div className="loading">Loading…</div>;
@@ -94,6 +104,13 @@ export default function SettingsPage() {
               </div>
             ))
           )}
+        </div>
+
+        <div className="settings-section">
+          <h3>Account</h3>
+          <button className="danger" onClick={handleSignOut} style={{ alignSelf: 'flex-start' }}>
+            Sign Out
+          </button>
         </div>
       </div>
     </div>

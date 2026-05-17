@@ -1,19 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getFriends,
-  getFriendRequests,
-  getSentRequests,
-  sendFriendRequest,
-  acceptFriendRequest,
-  declineFriendRequest,
-  removeFriend,
-  startConversation,
+  getFriends, getFriendRequests, getSentRequests,
+  acceptFriendRequest, declineFriendRequest,
   searchUsers,
-  blockUser,
 } from '../api/api';
 import Sidebar from '../components/Sidebar';
 import Avatar from '../components/Avatar';
+import ProfileOverlay from '../components/ProfileOverlay';
 
 interface Friend {
   friendshipId: number;
@@ -40,16 +34,30 @@ interface UserSearchResult {
   avatarUrl: string | null;
 }
 
+function formatLastSeen(ts: string | null | undefined): string {
+  if (!ts) return 'a long time ago';
+  const date = new Date(typeof ts === 'number' ? (ts as number) * 1000 : ts);
+  if (isNaN(date.getTime())) return '';
+  const diff = Date.now() - date.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return date.toLocaleDateString();
+}
+
 export default function FriendsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<'friends' | 'requests' | 'search'>('friends');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [incoming, setIncoming] = useState<FriendRequest[]>([]);
   const [sent, setSent] = useState<FriendRequest[]>([]);
-  const [addNickname, setAddNickname] = useState('');
-  const [addError, setAddError] = useState('');
+  const [overlayUserId, setOverlayUserId] = useState<number | null>(null);
 
-  // Live search state
+  // Live search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [dropdownResults, setDropdownResults] = useState<UserSearchResult[]>([]);
@@ -60,17 +68,17 @@ export default function FriendsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
-    getFriends().then(setFriends);
-    getFriendRequests().then(setIncoming);
-    getSentRequests().then(setSent);
+    getFriends().then(setFriends).catch(() => {});
+    getFriendRequests().then(setIncoming).catch(() => {});
+    getSentRequests().then(setSent).catch(() => {});
   };
 
   useEffect(() => { load(); }, []);
 
-  // Click-outside to close dropdown
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (searchInputRef.current && !searchInputRef.current.closest('.search-wrapper')?.contains(e.target as Node)) {
+      if (!searchInputRef.current?.closest('.search-wrapper')?.contains(e.target as Node)) {
         setShowDropdown(false);
       }
     };
@@ -78,38 +86,22 @@ export default function FriendsPage() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleSendRequest = async () => {
-    if (!addNickname.trim()) return;
-    try {
-      await sendFriendRequest(addNickname.trim());
-      setAddNickname('');
-      setAddError('');
-      load();
-    } catch {
-      setAddError('User not found or request already sent');
-    }
-  };
-
-  // Live search: fires 300 ms after the user stops typing
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setSearchError('');
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
     if (!value.trim()) {
       setDropdownResults([]);
       setShowDropdown(false);
       setSearchResults([]);
       return;
     }
-
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
         const results: UserSearchResult[] = await searchUsers(value.trim());
         setDropdownResults(results);
         setShowDropdown(results.length > 0);
-        // Also update the main results list shown in the tab
         setSearchResults(results);
       } catch {
         setSearchError('Search failed');
@@ -120,17 +112,6 @@ export default function FriendsPage() {
     }, 300);
   };
 
-  const handleMessage = async (uId: number) => {
-    const conv = await startConversation(uId);
-    navigate('/chats', { state: { conversationId: conv.id } });
-  };
-
-  const handleBlock = async (uId: number, nickname: string) => {
-    if (!window.confirm(`Block ${nickname}?`)) return;
-    await blockUser(uId);
-    load();
-  };
-
   return (
     <div className="app-layout">
       <Sidebar active="friends" />
@@ -138,16 +119,6 @@ export default function FriendsPage() {
 
         <div className="page-header">
           <h2>Friends</h2>
-          <div className="add-friend">
-            <input
-              placeholder="Add by nickname…"
-              value={addNickname}
-              onChange={(e) => setAddNickname(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendRequest()}
-            />
-            <button onClick={handleSendRequest}>Add</button>
-            {addError && <span className="error">{addError}</span>}
-          </div>
         </div>
 
         <div className="tabs">
@@ -166,24 +137,23 @@ export default function FriendsPage() {
         {tab === 'friends' && (
           <div className="friend-list">
             {friends.map((f) => (
-              <div key={f.friendshipId} className="friend-item">
+              <div
+                key={f.friendshipId}
+                className="friend-item"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setOverlayUserId(f.userId)}
+              >
                 <div className="friend-avatar">
                   <Avatar src={f.avatar} name={f.nickname} size={44} />
                   <span className={`status-dot ${f.online ? 'online' : 'offline'}`} />
                 </div>
                 <div className="friend-info">
                   <strong>{f.nickname}</strong>
-                  {!f.online && f.lastSeen && <small>Last seen {f.lastSeen}</small>}
-                </div>
-                <div className="friend-actions">
-                  <button onClick={() => handleMessage(f.userId)}>Message</button>
-                  <button className="danger" onClick={() => navigate(`/profile/${f.userId}`)}>Profile</button>
-                  <button className="danger" onClick={async () => { await removeFriend(f.friendshipId); load(); }}>Remove</button>
-                  <button className="danger" onClick={() => handleBlock(f.userId, f.nickname)}>Block</button>
+                  {!f.online && <small>{formatLastSeen(f.lastSeen)}</small>}
                 </div>
               </div>
             ))}
-            {friends.length === 0 && <p className="empty">No friends yet. Add someone!</p>}
+            {friends.length === 0 && <p className="empty">No friends yet. Search for someone!</p>}
           </div>
         )}
 
@@ -194,9 +164,7 @@ export default function FriendsPage() {
             {incoming.map((r) => (
               <div key={r.id} className="request-item">
                 <Avatar src={r.fromAvatar} name={r.fromNickname} size={40} />
-                <div className="friend-info">
-                  <strong>{r.fromNickname}</strong>
-                </div>
+                <div className="friend-info"><strong>{r.fromNickname}</strong></div>
                 <div className="friend-actions">
                   <button onClick={async () => { await acceptFriendRequest(r.id); load(); }}>Accept</button>
                   <button className="danger" onClick={async () => { await declineFriendRequest(r.id); load(); }}>Decline</button>
@@ -209,9 +177,7 @@ export default function FriendsPage() {
             {sent.map((r) => (
               <div key={r.id} className="request-item">
                 <Avatar src={null} name={r.toNickname || '?'} size={40} />
-                <div className="friend-info">
-                  <strong>{r.toNickname}</strong>
-                </div>
+                <div className="friend-info"><strong>{r.toNickname}</strong></div>
                 <span className="tag">Pending</span>
               </div>
             ))}
@@ -236,49 +202,36 @@ export default function FriendsPage() {
                 {searchError && <span className="error">{searchError}</span>}
               </div>
 
-              {/* Dropdown */}
               {showDropdown && (
                 <div className="search-dropdown">
-                  {dropdownResults.length > 0 ? dropdownResults.map((u) => (
+                  {dropdownResults.map((u) => (
                     <div
                       key={u.id}
                       className="search-dropdown-item"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setShowDropdown(false);
-                        navigate(`/profile/${u.id}`);
+                        setOverlayUserId(u.id);
                       }}
                     >
                       <Avatar src={u.avatarUrl} name={u.nickname} size={32} />
                       <span>{u.nickname}</span>
                     </div>
-                  )) : (
-                    <div className="search-dropdown-empty">No users found</div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Full results list */}
             <div className="search-results">
               {searchResults.map((u) => (
-                <div key={u.id} className="search-result-item">
+                <div
+                  key={u.id}
+                  className="search-result-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setOverlayUserId(u.id)}
+                >
                   <Avatar src={u.avatarUrl} name={u.nickname} size={44} />
-                  <div className="friend-info">
-                    <strong>{u.nickname}</strong>
-                  </div>
-                  <div className="friend-actions">
-                    <button onClick={() => navigate(`/profile/${u.id}`)}>Profile</button>
-                    <button onClick={async () => {
-                      try {
-                        await sendFriendRequest(u.nickname);
-                        alert('Friend request sent!');
-                      } catch {
-                        alert('Request already sent or unavailable');
-                      }
-                    }}>Add Friend</button>
-                    <button onClick={() => handleMessage(u.id)}>Message</button>
-                  </div>
+                  <div className="friend-info"><strong>{u.nickname}</strong></div>
                 </div>
               ))}
               {searchQuery && !isSearching && searchResults.length === 0 && (
@@ -286,6 +239,15 @@ export default function FriendsPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Profile overlay */}
+        {overlayUserId !== null && (
+          <ProfileOverlay
+            userId={overlayUserId}
+            onClose={() => { setOverlayUserId(null); load(); }}
+            onMessage={(convId) => navigate('/chats', { state: { conversationId: convId } })}
+          />
         )}
 
       </div>

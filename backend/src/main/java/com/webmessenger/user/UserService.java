@@ -90,7 +90,7 @@ public class UserService {
                             .contentType(file.getContentType())
                             .build()
             );
-            String publicUrl = minioEndpoint + "/" + minioBucket + "/" + objectName;
+            String publicUrl = "/minio/" + minioBucket + "/" + objectName;
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
             user.setAvatarUrl(publicUrl);

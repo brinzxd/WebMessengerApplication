@@ -2,7 +2,7 @@ package com.webmessenger.presence;
 
 import com.webmessenger.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -15,15 +15,22 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class PresenceService {
 
-  private final SimpMessagingTemplate messagingTemplate;
+  /** A user is considered offline if no HTTP activity arrives within this window. */
+  private static final long INACTIVITY_THRESHOLD_MS = 60_000L;
+
   private final UserRepository userRepository;
 
-  /** userId -> last-seen timestamp as Instant (null = currently online) */
+  /** Sentinel: userId is mapped to this value while currently online. */
+  private static final Instant ONLINE = Instant.MAX;
+
+  /** userId -> last-seen timestamp; ONLINE sentinel means currently active. */
   private final Map<Long, Instant> lastSeen = new ConcurrentHashMap<>();
 
+  /** userId -> epoch millis of last HTTP activity (long-poll request or ping). */
+  private final Map<Long, Long> lastActiveAt = new ConcurrentHashMap<>();
+
   public void userConnected(Long userId) {
-    lastSeen.put(userId, null); // null means online right now
-    broadcastStatus(userId, true, null);
+    lastSeen.put(userId, ONLINE);
   }
 
   public void userDisconnected(Long userId) {
@@ -34,7 +41,35 @@ public class PresenceService {
       u.setLastSeenAt(LocalDateTime.ofInstant(now, ZoneOffset.UTC));
       userRepository.save(u);
     });
-    broadcastStatus(userId, false, now);
+  }
+
+  /**
+   * Marks the user as currently active over HTTP (long-poll request or /presence/ping).
+   * Promotes the user to online if they were not already.
+   */
+  public void recordActivity(Long userId) {
+    if (userId == null) return;
+    lastActiveAt.put(userId, System.currentTimeMillis());
+    Instant prev = lastSeen.get(userId);
+    if (prev != null || !lastSeen.containsKey(userId)) {
+      userConnected(userId);
+    }
+  }
+
+  /** Periodically marks users with no recent HTTP activity as offline. */
+  @Scheduled(fixedDelay = 15_000L)
+  public void sweepInactive() {
+    long now = System.currentTimeMillis();
+    for (Map.Entry<Long, Long> e : lastActiveAt.entrySet()) {
+      if (now - e.getValue() > INACTIVITY_THRESHOLD_MS) {
+        Long userId = e.getKey();
+        lastActiveAt.remove(userId);
+        // Only flip to offline if currently considered online.
+        if (ONLINE.equals(lastSeen.get(userId))) {
+          userDisconnected(userId);
+        }
+      }
+    }
   }
 
   public PresenceStatus getStatus(Long userId) {
@@ -50,12 +85,8 @@ public class PresenceService {
           .orElse(new PresenceStatus(userId, false, null));
     }
     Instant ts = lastSeen.get(userId);
-    return new PresenceStatus(userId, ts == null, ts);
-  }
-
-  private void broadcastStatus(Long userId, boolean online, Instant lastSeenAt) {
-    messagingTemplate.convertAndSend("/topic/presence/" + userId,
-        new PresenceStatus(userId, online, lastSeenAt));
+    boolean online = ONLINE.equals(ts);
+    return new PresenceStatus(userId, online, online ? null : ts);
   }
 
   public record PresenceStatus(Long userId, boolean online, Instant lastSeen) {}

@@ -18,11 +18,11 @@ public class FriendController {
 
     // POST /api/friends/request  { nickname }
     @PostMapping("/request")
-    public ResponseEntity<FriendRequest> sendRequest(
+    public ResponseEntity<Void> sendRequest(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(
-                friendService.sendRequest(principal.getId(), body.get("nickname")));
+        friendService.sendRequest(principal.getId(), body.get("nickname"));
+        return ResponseEntity.noContent().build();
     }
 
     // POST /api/friends/request/{id}/accept

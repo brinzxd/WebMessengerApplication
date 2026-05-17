@@ -26,4 +26,15 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findVisibleMessages(
             @Param("convId") Long conversationId,
             @Param("userId") Long userId);
+
+    @Query("SELECT m FROM Message m WHERE m.conversation.id = :convId " +
+            "AND m.id > :afterId " +
+            "AND m.deletedForAllAt IS NULL " +
+            "AND m.id NOT IN (" +
+            "  SELECT mh.message.id FROM MessageHidden mh WHERE mh.user.id = :userId" +
+            ") ORDER BY m.sentAt ASC")
+    List<Message> findVisibleMessagesAfter(
+            @Param("convId") Long conversationId,
+            @Param("userId") Long userId,
+            @Param("afterId") Long afterId);
 }

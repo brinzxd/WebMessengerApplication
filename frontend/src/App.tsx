@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import { presencePing } from './api/api';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatsPage from './pages/ChatsPage';
@@ -9,11 +11,25 @@ import SettingsPage from './pages/SettingsPage';
 
 function PrivateLayout({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  if (!hasHydrated) return null;
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
+/** Pings the presence endpoint every 30s while logged in. */
+function usePresenceHeartbeat() {
+  const token = useAuthStore((s) => s.token);
+  useEffect(() => {
+    if (!token) return;
+    presencePing();
+    const id = setInterval(presencePing, 30_000);
+    return () => clearInterval(id);
+  }, [token]);
+}
+
 export default function App() {
+  usePresenceHeartbeat();
   return (
     <BrowserRouter>
       <Routes>

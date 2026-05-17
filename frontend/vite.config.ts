@@ -14,6 +14,11 @@ export default defineConfig({
         target: 'ws://localhost:8080',
         ws: true,
       },
+      '/minio/': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/minio/, ''),
+      },
     },
   },
 });

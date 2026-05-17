@@ -9,14 +9,19 @@ public class ConversationDto {
     public String otherAvatar;
     public String lastMessage;
     public Instant lastMessageTime;
+    public boolean otherOnline;
+    public Instant otherLastSeen;
 
     public ConversationDto(Long id, Long otherUserId, String otherNickname, String otherAvatar,
-                           String lastMessage, Instant lastMessageTime) {
+                           String lastMessage, Instant lastMessageTime,
+                           boolean otherOnline, Instant otherLastSeen) {
         this.id = id;
         this.otherUserId = otherUserId;
         this.otherNickname = otherNickname;
         this.otherAvatar = otherAvatar;
         this.lastMessage = lastMessage;
         this.lastMessageTime = lastMessageTime;
+        this.otherOnline = otherOnline;
+        this.otherLastSeen = otherLastSeen;
     }
 }

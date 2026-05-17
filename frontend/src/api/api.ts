@@ -9,6 +9,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const url: string = err.config?.url ?? '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+    if (err.response?.status === 401 && !isAuthEndpoint) {
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default api;
 
 // Auth
@@ -71,9 +83,7 @@ export const updateNickname = (nickname: string) =>
 export const uploadAvatar = (file: File) => {
   const form = new FormData();
   form.append('file', file);
-  return api.post('/users/me/avatar', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).then((r) => r.data);
+  return api.post('/users/me/avatar', form).then((r) => r.data);
 };
 
 // Settings
@@ -91,3 +101,7 @@ export const blockUser = (userId: number) =>
 
 export const unblockUser = (userId: number) =>
   api.delete(`/settings/block/${userId}`).then((r) => r.data);
+
+// Presence
+export const presencePing = () =>
+  api.post('/presence/ping').then((r) => r.data).catch(() => { /* best-effort */ });

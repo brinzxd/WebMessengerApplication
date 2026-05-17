@@ -1,6 +1,7 @@
 package com.webmessenger.chat;
 
 import com.webmessenger.friend.FriendshipRepository;
+import com.webmessenger.presence.PresenceService;
 import com.webmessenger.user.BlockedUserRepository;
 import com.webmessenger.user.User;
 import com.webmessenger.user.UserRepository;
@@ -9,13 +10,21 @@ import com.webmessenger.user.UserSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,9 +36,30 @@ public class ChatService {
     private final MessageHiddenRepository messageHiddenRepository;
     private final UserRepository userRepository;
     private final UserSettingsRepository userSettingsRepository;
-    private final SimpMessagingTemplate messagingTemplate;
     private final BlockedUserRepository blockedUserRepository;
     private final FriendshipRepository friendshipRepository;
+    private final PresenceService presenceService;
+
+    /** Per-conversation long-poll waiters for new messages. */
+    private final Map<Long, List<MessageWaiter>> messageWaiters = new ConcurrentHashMap<>();
+
+    /** Per-conversation: userId -> epoch millis at which the "typing" state expires. */
+    private final Map<Long, Map<Long, Long>> typingState = new ConcurrentHashMap<>();
+
+    /** Per-conversation long-poll waiters for typing events. */
+    private final Map<Long, List<TypingWaiter>> typingWaiters = new ConcurrentHashMap<>();
+
+    /** Lifetime (ms) of a single "typing" signal. */
+    private static final long TYPING_TTL_MS = 3_000L;
+
+    private record MessageWaiter(
+            Long userId,
+            Long afterMessageId,
+            DeferredResult<ResponseEntity<List<MessageDto>>> result) {}
+
+    private record TypingWaiter(
+            Long userId,
+            DeferredResult<ResponseEntity<TypingDto>> result) {}
 
     private MessageDto toDto(Message m) {
         return new MessageDto(
@@ -64,10 +94,18 @@ public class ChatService {
         conversationRepository.save(conv);
 
         MessageDto dto = toDto(saved);
-        messagingTemplate.convertAndSendToUser(
-                conv.getUser1().getId().toString(), "/queue/messages", dto);
-        messagingTemplate.convertAndSendToUser(
-                conv.getUser2().getId().toString(), "/queue/messages", dto);
+        final Long convId = conv.getId();
+        clearTyping(convId, senderId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notifyMessageWaiters(convId);
+                }
+            });
+        } else {
+            notifyMessageWaiters(convId);
+        }
         return dto;
     }
 
@@ -101,6 +139,184 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
+    private List<MessageDto> getMessagesAfter(Long userId, Long conversationId, Long afterMessageId) {
+        return messageRepository
+                .findVisibleMessagesAfter(conversationId, userId, afterMessageId)
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * HTTP long polling for new messages.
+     *
+     * Behavior:
+     *  - afterMessageId == null  -> immediate full history (backward compatible with old GET).
+     *  - afterMessageId != null  -> return messages with id > afterMessageId;
+     *      if none and waitMs > 0, hold the request open until a new message
+     *      arrives or the timeout fires (then 200 OK with empty list).
+     */
+    public DeferredResult<ResponseEntity<List<MessageDto>>> pollMessages(
+            Long userId, Long conversationId, Long afterMessageId, long waitMs) {
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!conv.getUser1().getId().equals(userId) && !conv.getUser2().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        presenceService.recordActivity(userId);
+
+        if (afterMessageId == null) {
+            DeferredResult<ResponseEntity<List<MessageDto>>> immediate = new DeferredResult<>();
+            immediate.setResult(ResponseEntity.ok(getMessages(userId, conversationId)));
+            return immediate;
+        }
+
+        List<MessageDto> fresh = getMessagesAfter(userId, conversationId, afterMessageId);
+        if (!fresh.isEmpty() || waitMs <= 0) {
+            DeferredResult<ResponseEntity<List<MessageDto>>> immediate = new DeferredResult<>();
+            immediate.setResult(ResponseEntity.ok(fresh));
+            return immediate;
+        }
+
+        DeferredResult<ResponseEntity<List<MessageDto>>> result =
+                new DeferredResult<>(waitMs, ResponseEntity.ok(Collections.<MessageDto>emptyList()));
+        MessageWaiter waiter = new MessageWaiter(userId, afterMessageId, result);
+        messageWaiters
+                .computeIfAbsent(conversationId, k -> new CopyOnWriteArrayList<>())
+                .add(waiter);
+
+        Runnable cleanup = () -> {
+            List<MessageWaiter> list = messageWaiters.get(conversationId);
+            if (list != null) {
+                list.remove(waiter);
+                if (list.isEmpty()) messageWaiters.remove(conversationId, list);
+            }
+        };
+        result.onCompletion(cleanup);
+        result.onTimeout(cleanup);
+
+        // Race guard: a message could have been committed between our first
+        // DB lookup and the waiter registration; re-check once now.
+        List<MessageDto> recheck = getMessagesAfter(userId, conversationId, afterMessageId);
+        if (!recheck.isEmpty()) {
+            result.setResult(ResponseEntity.ok(recheck));
+        }
+        return result;
+    }
+
+    private void notifyMessageWaiters(Long conversationId) {
+        List<MessageWaiter> list = messageWaiters.get(conversationId);
+        if (list == null || list.isEmpty()) return;
+        for (MessageWaiter w : new ArrayList<>(list)) {
+            try {
+                List<MessageDto> msgs = getMessagesAfter(w.userId(), conversationId, w.afterMessageId());
+                if (!msgs.isEmpty()) {
+                    w.result().setResult(ResponseEntity.ok(msgs));
+                }
+            } catch (Exception e) {
+                w.result().setErrorResult(e);
+            }
+        }
+    }
+
+    /** Records a "user is typing" signal in the given conversation and wakes up waiters. */
+    public void markTyping(Long senderId, Long conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!conv.getUser1().getId().equals(senderId) && !conv.getUser2().getId().equals(senderId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        typingState
+                .computeIfAbsent(conversationId, k -> new ConcurrentHashMap<>())
+                .put(senderId, System.currentTimeMillis() + TYPING_TTL_MS);
+        notifyTypingWaiters(conversationId, senderId);
+    }
+
+    /**
+     * HTTP long polling for "peer is typing" events.
+     *
+     * Returns immediately with the peer's userId if a fresh typing signal exists,
+     * otherwise holds the request open until a signal arrives or the timeout fires
+     * (then 204 No Content via null body).
+     */
+    public DeferredResult<ResponseEntity<TypingDto>> pollTyping(
+            Long userId, Long conversationId, long waitMs) {
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!conv.getUser1().getId().equals(userId) && !conv.getUser2().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        presenceService.recordActivity(userId);
+
+        TypingDto fresh = currentTypingPeer(conversationId, userId);
+        if (fresh != null || waitMs <= 0) {
+            DeferredResult<ResponseEntity<TypingDto>> immediate = new DeferredResult<>();
+            immediate.setResult(fresh != null
+                    ? ResponseEntity.ok(fresh)
+                    : ResponseEntity.noContent().build());
+            return immediate;
+        }
+
+        DeferredResult<ResponseEntity<TypingDto>> result =
+                new DeferredResult<>(waitMs, ResponseEntity.noContent().build());
+        TypingWaiter waiter = new TypingWaiter(userId, result);
+        typingWaiters
+                .computeIfAbsent(conversationId, k -> new CopyOnWriteArrayList<>())
+                .add(waiter);
+
+        Runnable cleanup = () -> {
+            List<TypingWaiter> list = typingWaiters.get(conversationId);
+            if (list != null) {
+                list.remove(waiter);
+                if (list.isEmpty()) typingWaiters.remove(conversationId, list);
+            }
+        };
+        result.onCompletion(cleanup);
+        result.onTimeout(cleanup);
+
+        // Race guard
+        TypingDto recheck = currentTypingPeer(conversationId, userId);
+        if (recheck != null) {
+            result.setResult(ResponseEntity.ok(recheck));
+        }
+        return result;
+    }
+
+    /** Returns a fresh typing signal from any participant other than {@code excludeUserId}, or null. */
+    private TypingDto currentTypingPeer(Long conversationId, Long excludeUserId) {
+        Map<Long, Long> state = typingState.get(conversationId);
+        if (state == null || state.isEmpty()) return null;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<Long, Long> e : state.entrySet()) {
+            if (e.getKey().equals(excludeUserId)) continue;
+            if (e.getValue() > now) {
+                return new TypingDto(conversationId, e.getKey());
+            }
+        }
+        return null;
+    }
+
+    private void notifyTypingWaiters(Long conversationId, Long typingUserId) {
+        List<TypingWaiter> list = typingWaiters.get(conversationId);
+        if (list == null || list.isEmpty()) return;
+        TypingDto payload = new TypingDto(conversationId, typingUserId);
+        for (TypingWaiter w : new ArrayList<>(list)) {
+            if (typingUserId.equals(w.userId())) continue; // don't echo to the typist
+            try {
+                w.result().setResult(ResponseEntity.ok(payload));
+            } catch (Exception e) {
+                w.result().setErrorResult(e);
+            }
+        }
+    }
+
+    private void clearTyping(Long conversationId, Long userId) {
+        Map<Long, Long> state = typingState.get(conversationId);
+        if (state != null) state.remove(userId);
+    }
+
     public List<ConversationDto> getConversations(Long userId) {
         return conversationRepository.findAllByUserId(userId).stream()
                 .map(conv -> {
@@ -108,13 +324,16 @@ public class ChatService {
                     Message lastMsg = messageRepository
                             .findTopByConversationIdOrderBySentAtDesc(conv.getId())
                             .orElse(null);
+                    PresenceService.PresenceStatus status = presenceService.getStatus(other.getId());
                     return new ConversationDto(
                             conv.getId(),
                             other.getId(),
                             other.getNickname(),
                             other.getAvatarUrl(),
                             lastMsg != null ? lastMsg.getContent() : null,
-                            conv.getLastMessageAt());
+                            conv.getLastMessageAt(),
+                            status.online(),
+                            status.lastSeen());
                 })
                 .collect(Collectors.toList());
     }
@@ -136,13 +355,16 @@ public class ChatService {
         Message lastMsg = messageRepository
                 .findTopByConversationIdOrderBySentAtDesc(conv.getId())
                 .orElse(null);
+        PresenceService.PresenceStatus status = presenceService.getStatus(other.getId());
         return new ConversationDto(
                 conv.getId(),
                 other.getId(),
                 other.getNickname(),
                 other.getAvatarUrl(),
                 lastMsg != null ? lastMsg.getContent() : null,
-                conv.getLastMessageAt());
+                conv.getLastMessageAt(),
+                status.online(),
+                status.lastSeen());
     }
 
     @Transactional
@@ -170,10 +392,5 @@ public class ChatService {
         }
         msg.setDeletedForAllAt(Instant.now());
         messageRepository.save(msg);
-        Conversation conv = msg.getConversation();
-        messagingTemplate.convertAndSendToUser(
-                conv.getUser1().getId().toString(), "/queue/message-deleted", messageId);
-        messagingTemplate.convertAndSendToUser(
-                conv.getUser2().getId().toString(), "/queue/message-deleted", messageId);
     }
 }
